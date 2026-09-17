@@ -1,0 +1,12 @@
+# 데이터 (Zenodo에서 직접 받아서 로컬에서만 사용, git에는 올리지 않음)
+data/*.csv
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# OS
+.DS_Store
