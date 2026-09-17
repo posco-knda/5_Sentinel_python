@@ -44,4 +44,4 @@ reports/         문제정의서 / 결과보고서 / 발표자료
 
 ## 관련 저장소
 
-- 대시보드(시연용, 제출물 아님): `sentinel-dashboard`
+- 대시보드(시연용, 제출물 아님): [`5_Sentinel_dashboard`](https://github.com/posco-knda/5_Sentinel_dashboard)
