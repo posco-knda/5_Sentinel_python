@@ -12,6 +12,20 @@
 - DOI: [10.5281/zenodo.11469702](https://doi.org/10.5281/zenodo.11469702) (2026 Frontiers in Artificial Intelligence 게재, CC-BY-4.0)
 - `tcm5_dataset_1.csv` ~ `tcm5_dataset_6.csv` 6개 파일을 위 DOI 페이지에서 받아 `data/` 폴더에 넣어주세요 (용량 문제로 git에는 커밋하지 않습니다).
 
+## 환경 설정
+
+Python 3.10 이상을 권장합니다.
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate      # Windows
+# source .venv/bin/activate  # Mac/Linux
+
+pip install -r requirements.txt
+```
+
+라이브러리를 새로 추가했다면(`pip install XXX`), 다른 사람도 같은 버전을 쓸 수 있게 `requirements.txt`에 한 줄 추가해서 같이 커밋해주세요.
+
 ## 실행 순서
 
 ```
@@ -25,6 +39,7 @@ notebooks/04_eval.ipynb         평가·오류 사례 분석
 
 ```
 README.md
+requirements.txt 분석 라이브러리 목록 (pip install -r requirements.txt)
 data/            원본 CSV (직접 다운로드, git 미포함) — data/README.md 참고
 notebooks/       01_eda / 02_timeseries / 03_model / 04_eval (각자 새로 만들어서 작업)
 src/             preprocess.py / features.py / model.py (각자 새로 만들어서 작업)

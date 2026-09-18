@@ -1,0 +1,9 @@
+# 분석 환경 공통 라이브러리 — pip install -r requirements.txt
+pandas>=2.0
+numpy>=1.26
+matplotlib>=3.8
+seaborn>=0.13
+scikit-learn>=1.4
+lifelines>=0.29
+jupyter>=1.0
+ipykernel>=6.29
