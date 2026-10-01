@@ -1,9 +1,10 @@
-# 분석 환경 공통 라이브러리 — pip install -r requirements.txt
-pandas>=2.0
-numpy>=1.26
-matplotlib>=3.8
-seaborn>=0.13
-scikit-learn>=1.4
-lifelines>=0.29
-jupyter>=1.0
-ipykernel>=6.29
+# 개발·검증에 사용한 버전 (Python 3.14, Windows 11, CPU)
+# 설치: pip install -r requirements.txt
+pandas>=2.3
+numpy>=2.0
+scikit-learn>=1.5
+matplotlib>=3.9
+joblib>=1.4
+# PyTorch는 GRU·LSTM을 쓰는 04·05·07·10·11·12번에 필요. GPU가 없으면 CPU 버전으로 충분합니다:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.4

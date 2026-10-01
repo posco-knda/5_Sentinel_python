@@ -1,12 +1,8 @@
-# 데이터 (Zenodo에서 직접 받아서 로컬에서만 사용, git에는 올리지 않음)
-data/*.csv
-
-# Python
 __pycache__/
-*.pyc
-.ipynb_checkpoints/
-.venv/
-venv/
-
-# OS
-.DS_Store
+# 학습된 모델 파일(용량 큼) — 03/04 스크립트 실행 시 자동 생성
+outputs/models/
+# FD002~FD004 원본 데이터(용량 큼)는 레포에 올리지 않음 — README의 내려받기 안내 참고
+data/*_FD002.txt
+data/*_FD003.txt
+data/*_FD004.txt
+**/models/
