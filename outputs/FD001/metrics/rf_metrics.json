@@ -1,0 +1,46 @@
+{
+  "model": "random_forest",
+  "description": "롤링윈도우(15) 평균/표준편차/기울기 + 현재값 피처 기반 RF 회귀",
+  "hyperparam_search": [
+    {
+      "n_estimators": 100,
+      "max_depth": 8,
+      "val_MAE": 12.310613017515854,
+      "seconds": 6.1
+    },
+    {
+      "n_estimators": 200,
+      "max_depth": 10,
+      "val_MAE": 12.017269917403112,
+      "seconds": 15.8
+    },
+    {
+      "n_estimators": 300,
+      "max_depth": 12,
+      "val_MAE": 11.937467685940401,
+      "seconds": 27.8
+    },
+    {
+      "n_estimators": 300,
+      "max_depth": null,
+      "val_MAE": 11.903788703582512,
+      "seconds": 34.9
+    }
+  ],
+  "chosen_hyperparams": {
+    "n_estimators": 300,
+    "max_depth": null,
+    "val_MAE": 11.903788703582512,
+    "seconds": 34.9
+  },
+  "validation": {
+    "MAE": 11.903788703582512,
+    "RMSE": 17.270998721257737,
+    "NASA_score": 44332.9777458929
+  },
+  "official_test": {
+    "MAE": 14.191907901716508,
+    "RMSE": 19.87083038534893,
+    "NASA_score": 1275.7715974403925
+  }
+}
