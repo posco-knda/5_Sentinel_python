@@ -94,12 +94,18 @@ for u in red_units:
     p = max(flow[u]["part"], key=lambda k: flow[u]["part"][k])
     top_part[p] = top_part.get(p, 0) + 1
 
+# 엔진별 가장 크게 변한 부품(상위 1개)과 이탈도 — 목록·집계 화면이 큰 센서별 파일(part_flow.ts)을 안 읽고도 쓸 수 있게 별도로 둠
+top_parts = {}
+for u, v in flow.items():
+    pid = max(v["part"], key=lambda k: v["part"][k])
+    top_parts[str(u)] = [pid, v["part"][pid], v["short"]]
+
 meta = {
     "baselineCycles": BASELINE_CYCLES, "recentCycles": RECENT_CYCLES,
     "parts": [{"id": pid, "label": label, "sensors": [{"id": s, "name": SENSOR_MEANING[s], "unit": display_unit(s)} for s in ss]}
               for pid, label, ss in PARTS],
     "sigma": {s: round(sigma[s], 3) for s in sensors},
-    "redTopPart": top_part, "redEngines": len(red_units), "profile": profile,
+    "redTopPart": top_part, "redEngines": len(red_units), "profile": profile, "topParts": top_parts,
     "red": RISK_THRESHOLDS["red_at_or_below"], "yellow": RISK_THRESHOLDS["yellow_below"],
 }
 J = lambda o: json.dumps(o, ensure_ascii=False, separators=(",", ":"))
@@ -123,6 +129,8 @@ export const partMeta: {{
   redTopPart: Record<string, number>
   redEngines: number
   profile: Record<'red' | 'warn' | 'ok', Record<string, number>>
+  /** 엔진별 [가장 크게 변한 부품, 이탈도, 관측이 짧은 엔진 여부] */
+  topParts: Record<string, [string, number, boolean]>
   red: number
   yellow: number
 }} = {J(meta)}
