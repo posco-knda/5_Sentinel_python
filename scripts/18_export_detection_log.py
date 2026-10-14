@@ -54,7 +54,7 @@ def runs(mask: np.ndarray):
     return out
 
 
-rows, curves = [], {}
+rows, curves, fleet = [], {}, []
 for u in summary.index:
     ts = json.load(open(f"{OUT_DASH}/engine_timeseries/{u}.json", encoding="utf-8"))
     cyc = np.asarray(ts["cycles"], dtype=int)
@@ -63,6 +63,10 @@ for u in summary.index:
     last = int(cyc[last_i])
     true_end = float(summary.loc[u, "true_RUL_for_validation_only"])
     level = summary.loc[u, "risk_level"]  # 마지막 시점의 공식 등급
+
+    # 홈 화면 차트용: 로그에 안 오르는 엔진까지 포함한 전체 248대의 마지막 시점 요약
+    fleet.append({"unit": int(u), "pred": round(float(pred[last_i]), 1), "actual": int(round(true_end)),
+                  "level": {"RED": "red", "YELLOW": "warn", "GREEN": "ok"}[level]})
 
     warn_mask, danger_mask = pred < YELLOW, pred <= RED
     warn_mask[last_i] = level in ("YELLOW", "RED")
@@ -120,6 +124,8 @@ summary_out = {
     "leadMedianTp": float(np.median(leads)) if leads else None,
     "leadMinTp": int(min(leads)) if leads else None,
     "leadMaxTp": int(max(leads)) if leads else None,
+    "levels": {k: sum(1 for f in fleet if f["level"] == k) for k in ("red", "warn", "ok")},
+    "tn": int(len(summary)) - counts["tp"] - counts["fn"] - counts["fp"],
     "red": RED,
     "yellow": YELLOW,
 }
@@ -167,13 +173,25 @@ export interface LogSummary {{
   leadMedianTp: number | null
   leadMinTp: number | null
   leadMaxTp: number | null
+  levels: {{ red: number; warn: number; ok: number }}
+  tn: number
   red: number
   yellow: number
+}}
+
+/** 공식 test 전체 엔진의 마지막 관측 시점 요약 — actual은 평가용 정답(남은 수명) */
+export interface FleetPoint {{
+  unit: number
+  pred: number
+  actual: number
+  level: 'red' | 'warn' | 'ok'
 }}
 
 export const logSummary: LogSummary = {J(summary_out)}
 
 export const logRows: LogRow[] = {J(rows)}
+
+export const fleetPoints: FleetPoint[] = {J(fleet)}
 """
 with open(f"{OUT_DASH}/detection_log.ts", "w", encoding="utf-8") as f:
     f.write(ts_code)
