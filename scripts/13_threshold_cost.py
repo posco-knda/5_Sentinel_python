@@ -44,48 +44,21 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from common import load_raw, DANGER_RUL, DATASET, TRAIN_FILE, OUT_METRICS, OUT_FIG
+from common import (
+    load_raw, DANGER_RUL, DATASET, TRAIN_FILE, OUT_METRICS, OUT_FIG,
+    MAINT_N_SIM, maintenance_lead_time, simulate_maintenance,
+)
 
 # 비용 비율 (계획 정비 = 1 기준). 1:5가 문헌 (1)의 주 설정, 1:2는 문헌 (2)로 보수적으로 확인.
 COST_SETTINGS = {"1:5 (de Pater 2022)": 5.0, "1:2 (Lee & Mitici 2023)": 2.0}
-PREP_DAYS = 7              # 문헌 (1): 추가 정비 준비 최소 7일
-SLOT_INTERVAL = (10, 20)   # 문헌 (1): 정비 슬롯 10~20일 간격
-REVIEW_EVERY = 7           # 문헌 (1): 정비 계획 매주 갱신
-N_SIM = 200                # 무작위 반복 횟수
-N_GRID = list(range(10, 81, 5))
-MODELS = {"GRU (04번)": "gru", "RandomForest (03번)": "rf"}
+# 정비 정책 상수(준비 7일·슬롯 10~20일·주간 계획·200회 반복)와 시뮬레이션 함수는 common.py에 있습니다 (15번과 공용).
+N_SIM = MAINT_N_SIM
 OLD_DANGER_RUL = 30        # 이 분석 전에 쓰던 기준 (과제 문서 예시값) — 비교용으로 함께 기록
+# 위험 기준(DANGER_RUL)과 예전 기준이 5의 배수가 아니어도 격자에 반드시 들어가도록 합칩니다.
+N_GRID = sorted(set(range(10, 81, 5)) | {DANGER_RUL, OLD_DANGER_RUL})
+MODELS = {"GRU (04번)": "gru", "RandomForest (03번)": "rf"}
 
 life = load_raw(TRAIN_FILE).groupby("unit")["cycle"].max()
-
-
-def lead_time(rng) -> int:
-    """경보 → 정비까지 걸리는 사이클 (주간 회의 대기 + 준비 7일 + 다음 슬롯까지 대기)."""
-    wait_review = rng.integers(0, REVIEW_EVERY)
-    interval = rng.integers(SLOT_INTERVAL[0], SLOT_INTERVAL[1] + 1)
-    wait_slot = rng.integers(0, interval)          # 준비가 끝난 뒤 다음 슬롯까지
-    return int(wait_review + PREP_DAYS + wait_slot)
-
-
-def simulate(alarm_cycle: dict, n_sim: int, cost_fail: float, seed: int = 42) -> dict:
-    """alarm_cycle: 엔진 → 경보 사이클(None이면 경보 없음)."""
-    rng = np.random.default_rng(seed)
-    total_cost = total_ops = failures = wasted = 0.0
-    for _ in range(n_sim):
-        for u, a in alarm_cycle.items():
-            L = int(life[u])
-            m = None if a is None else a + lead_time(rng)
-            if m is None or m >= L:
-                total_cost += cost_fail
-                total_ops += L
-                failures += 1
-            else:
-                total_cost += 1.0
-                total_ops += m
-                wasted += L - m
-    n = n_sim * len(alarm_cycle)
-    return {"cost_per_1000_cycles": 1000 * total_cost / total_ops, "failure_rate": failures / n,
-            "avg_wasted_cycles": wasted / max(1, n - failures)}
 
 
 rows = []
@@ -95,7 +68,7 @@ for name, key in MODELS.items():
         alarm = {u: (int(g.loc[g["RUL_pred"] <= n, "cycle"].iloc[0]) if (g["RUL_pred"] <= n).any() else None)
                  for u, g in pred.groupby("unit")}
         for cname, cf in COST_SETTINGS.items():
-            rows.append({"model": name, "cost_ratio": cname, "N": n, **simulate(alarm, N_SIM, cf)})
+            rows.append({"model": name, "cost_ratio": cname, "N": n, **simulate_maintenance(alarm, life, cf, N_SIM)})
 res = pd.DataFrame(rows)
 res.to_csv(f"{OUT_METRICS}/threshold_cost.csv", index=False, encoding="utf-8-sig")
 
@@ -118,7 +91,7 @@ summary = pd.DataFrame(summary)
 summary.to_csv(f"{OUT_METRICS}/threshold_cost_summary.csv", index=False, encoding="utf-8-sig")
 
 rng = np.random.default_rng(0)
-leads = np.array([lead_time(rng) for _ in range(10000)])
+leads = np.array([maintenance_lead_time(rng) for _ in range(10000)])
 print(f"[{DATASET}] validation 엔진 {len(pred['unit'].unique())}대, 경보→정비 {leads.min()}~{leads.max()}사이클 "
       f"(평균 {leads.mean():.1f}, 90% 이내 {np.percentile(leads, 90):.0f})")
 print(summary.to_string(index=False))
@@ -180,7 +153,7 @@ if os.path.exists(_pred_path):
             alarm = {u: (int(g.loc[g["RUL_pred"] <= n, "cycle"].iloc[0]) if (g["RUL_pred"] <= n).any() else None)
                      for u, g in d.groupby("unit")}
             for cname, cf in COST_SETTINGS.items():
-                rows_all.append({"model": name, "cost_ratio": cname, "N": n, **simulate(alarm, N_SIM, cf)})
+                rows_all.append({"model": name, "cost_ratio": cname, "N": n, **simulate_maintenance(alarm, life, cf, N_SIM)})
     all_res = pd.DataFrame(rows_all)
     out = []
     for (m, c), g in all_res.groupby(["model", "cost_ratio"], sort=False):

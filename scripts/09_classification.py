@@ -290,8 +290,10 @@ print(f"\n[경보 선행시간] 3사이클 연속 경보 기준, 고장 {lead['l
 # ---------------------------------------------------------------------------
 val_feat["FP"] = (val_feat["alarm"] == 1) & (val_feat["danger"] == 0)
 val_feat["FN"] = (val_feat["alarm"] == 0) & (val_feat["danger"] == 1)
-fp_unit = int(val_feat.groupby("unit")["FP"].sum().idxmax())
-fn_unit = int(val_feat.groupby("unit")["FN"].sum().idxmax())
+# 오탐(또는 미탐) 사이클이 한 번도 없으면 idxmax()가 아무 엔진이나 고르게 되므로, 그 경우 사례 없음(None)으로 둡니다.
+fp_by_unit, fn_by_unit = val_feat.groupby("unit")["FP"].sum(), val_feat.groupby("unit")["FN"].sum()
+fp_unit = int(fp_by_unit.idxmax()) if fp_by_unit.max() > 0 else None
+fn_unit = int(fn_by_unit.idxmax()) if fn_by_unit.max() > 0 else None
 raw_val = corrector.transform(train_raw[train_raw["unit"].isin(val_units)])
 
 # 그래프에 그릴 센서: 06번 도메인 해석에서 RUL 예측에 가장 크게 기여한 센서 1위
@@ -342,12 +344,17 @@ def plot_case(unit: int, kind: str, filename: str):
             "sensor_ma15_at_cycles": [round(float(v), 2) for v in r.set_index("cycle")[PLOT_SENSOR].rolling(15, min_periods=1).mean().loc[c]]}
 
 
-fp_case = plot_case(fp_unit, "FP", "cls_error_case_false_alarm.png")
-fn_case = plot_case(fn_unit, "FN", "cls_error_case_missed.png")
-print(f"\n[오탐 사례] 엔진 #{fp_case['unit']}: {fp_case['count']}사이클, 그때 실제 잔여 {fp_case['rul_at_cycles']}")
-print(f"[미탐 사례] 엔진 #{fn_case['unit']}: {fn_case['count']}사이클, 그때 실제 잔여 {fn_case['rul_at_cycles']}")
-print(f"  (비교: train 엔진이 위험 진입할 때 {PLOT_SENSOR} 평균 {typical_at_danger:.2f}, "
-      f"오탐 시점 {PLOT_SENSOR} 평균 {fp_case['sensor_ma15_at_cycles']}, 미탐 시점 평균 {fn_case['sensor_ma15_at_cycles']})")
+fp_case = plot_case(fp_unit, "FP", "cls_error_case_false_alarm.png") if fp_unit is not None else None
+fn_case = plot_case(fn_unit, "FN", "cls_error_case_missed.png") if fn_unit is not None else None
+print()
+for _label, _case in (("오탐", fp_case), ("미탐", fn_case)):
+    if _case is None:
+        print(f"[{_label} 사례] validation에 해당 사이클이 없어 그래프를 만들지 않았습니다.")
+    else:
+        print(f"[{_label} 사례] 엔진 #{_case['unit']}: {_case['count']}사이클, 그때 실제 잔여 {_case['rul_at_cycles']}")
+if fp_case and fn_case:
+    print(f"  (비교: train 엔진이 위험 진입할 때 {PLOT_SENSOR} 평균 {typical_at_danger:.2f}, "
+          f"오탐 시점 {PLOT_SENSOR} 평균 {fp_case['sensor_ma15_at_cycles']}, 미탐 시점 평균 {fn_case['sensor_ma15_at_cycles']})")
 
 # ---------------------------------------------------------------------------
 # 8. 저장
@@ -442,7 +449,7 @@ for _ in range(BOOT_N):
 q = lambda x: [round(float(np.percentile(x, 2.5)), 3), round(float(np.percentile(x, 97.5)), 3)]
 unc["validation"]["engines"] = int(len(uniq))
 unc["validation"]["F1_bootstrap_95"] = {n: [round(f1_from(per_engine[n]), 3), q(draws[n])] for n in per_engine}
-unc["validation"]["F1_diff_GRU_minus_RF_95"] = [round(f1_from(per_engine[gru_name]) - f1_from(per_engine[rf_name]), 3), q(diffs)]
+unc["validation"]["F1_diff_GRU_minus_RF_95"] = [round(float(f1_from(per_engine[gru_name]) - f1_from(per_engine[rf_name])), 3), q(diffs)]
 unc["validation"]["share_of_resamples_GRU_better"] = round(float(np.mean(np.array(diffs) > 0)), 3)
 
 safe = y_val == 0

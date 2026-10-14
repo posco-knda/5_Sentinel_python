@@ -161,7 +161,8 @@ ARCHS = {"LSTM": RULLSTM, "GRU": RULGRU}
 
 def load_seq_model(path: str):
     """04번에서 저장한 가중치를 불러옵니다 (저장 파일의 arch로 LSTM/GRU 구조를 고름)."""
-    ckpt = torch.load(path, weights_only=False)
+    # weights_only=True: 가중치·숫자·문자열만 읽고 파일 안의 임의 코드는 실행하지 않습니다 (04번 저장 형식은 이것만 담음).
+    ckpt = torch.load(path, weights_only=True)
     model_cls = ARCHS[ckpt.get("arch", "LSTM")]
     model = model_cls(len(ckpt["active_sensors"]), ckpt["hidden_size"], ckpt["fc_size"], ckpt["dropout"])
     model.load_state_dict(ckpt["model_state"])

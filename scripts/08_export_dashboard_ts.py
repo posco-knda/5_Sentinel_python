@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 
 from common import (
-    load_raw, RUL_CLIP_VALUE, RISK_THRESHOLDS, SENSOR_UNIT, RegimeCorrector, MULTI_REGIME,
+    load_raw, RUL_CLIP_VALUE, RISK_THRESHOLDS, display_unit, display_values, RegimeCorrector, MULTI_REGIME,
     OUT_METRICS, OUT_DASH, TRAIN_FILE, DATASET,
 )
 
@@ -215,7 +215,7 @@ for u in SELECTED_ENGINES:
 
     idx = np.unique(np.linspace(0, len(ts["cycles"]) - 1, SENSOR_TREND_POINTS).round().astype(int))
     sensor_trend = {
-        s: [{"h": ts["cycles"][i], "v": round(float(ts["sensors"][s][i]), 2)} for i in idx]
+        s: [{"h": ts["cycles"][i], "v": round(float(display_values(s, ts["sensors"][s][i])), 2)} for i in idx]
         for s in TREND_SENSORS
     }
     last_cycle = int(summary.loc[u, "last_observed_cycle"])
@@ -294,9 +294,10 @@ feature_importance = [
 train_view = RegimeCorrector().fit(train_raw, TREND_SENSORS).transform(train_raw)
 trend_meta = {}
 for s in TREND_SENSORS:
-    lo, hi = train_view[s].min(), train_view[s].max()
+    # 온도 센서는 그래프·발표와 같이 °C로 내보냅니다 (분석·모델 입력은 원래 단위 그대로)
+    lo, hi = display_values(s, train_view[s].min()), display_values(s, train_view[s].max())
     pad = (hi - lo) * TREND_DOMAIN_PAD
-    trend_meta[s] = {"unit": SENSOR_UNIT[s], "label": f"{short_label(s)} ({s})",
+    trend_meta[s] = {"unit": display_unit(s), "label": f"{short_label(s)} ({s})",
                      "domain": [round(lo - pad, 1), round(hi + pad, 1)]}
 
 # ---------------------------------------------------------------------------

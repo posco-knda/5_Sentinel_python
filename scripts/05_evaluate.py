@@ -29,7 +29,7 @@ import torch
 
 from common import (
     load_raw, add_rul_labels, split_engines, Normalizer, RUL_CLIP_VALUE, RegimeCorrector,
-    MULTI_REGIME, DATASET, SENSOR_UNIT, DANGER_RUL, sensor_label,
+    MULTI_REGIME, DATASET, DANGER_RUL, sensor_label, display_unit, display_values,
 )
 from seq_models import load_seq_model, predict_recurrent
 
@@ -144,15 +144,18 @@ def plot_case(uid, title, filename, note):
     suffix = " (운전조건 보정)" if MULTI_REGIME else ""
     facts = []
     for ax, s in zip(axes[:2], PLOT_SENSORS):
-        ma = raw_g[s].rolling(15, min_periods=1).mean()
-        ax.plot(raw_g["cycle"], raw_g[s], color="#c9c8c4", linewidth=0.8, label="관측값")
+        # 그래프·문구의 온도는 °C로 보여 줍니다 (sensor_label의 단위와 같도록 값도 같이 변환)
+        shown = display_values(s, raw_g[s])
+        ma = shown.rolling(15, min_periods=1).mean()
+        danger_level = float(display_values(s, DANGER_LEVEL[s]))
+        ax.plot(raw_g["cycle"], shown, color="#c9c8c4", linewidth=0.8, label="관측값")
         ax.plot(raw_g["cycle"], ma, color="#2a78d6", linewidth=2, label="최근 15사이클 평균")
-        ax.axhline(DANGER_LEVEL[s], color="#eb6834", linestyle="--", linewidth=1.2,
+        ax.axhline(danger_level, color="#eb6834", linestyle="--", linewidth=1.2,
                    label=f"train 엔진이 잔여 {DANGER_RUL}일 때 평균")
-        ax.set_ylabel(f"{s} ({SENSOR_UNIT[s]})" if SENSOR_UNIT[s] else s)
+        ax.set_ylabel(f"{s} ({display_unit(s)})" if display_unit(s) else s)
         ax.set_title(f"{sensor_label(s)}{suffix}", fontsize=10, loc="left")
         ax.legend(fontsize=8, loc="upper left")
-        facts.append(f"{s} 마지막 15사이클 평균 {ma.iloc[-1]:.1f} (위험 진입 평균 {DANGER_LEVEL[s]:.1f})")
+        facts.append(f"{s} 마지막 15사이클 평균 {ma.iloc[-1]:.1f} (위험 진입 평균 {danger_level:.1f})")
     axes[0].set_title(f"엔진 #{uid} ({DATASET} test) — {sensor_label(PLOT_SENSORS[0])}{suffix}", fontsize=10, loc="left")
 
     axes[2].plot(cycles, true_curve, label=f"실제 RUL (학습 라벨처럼 {RUL_CLIP_VALUE}에서 자름)", color="black", linewidth=2)

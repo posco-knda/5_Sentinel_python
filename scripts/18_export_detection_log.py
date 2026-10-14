@@ -27,7 +27,6 @@
 """
 
 import json
-from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -138,11 +137,11 @@ with open(f"{OUT_DASH}/detection_log.json", "w", encoding="utf-8") as f:
     json.dump({"summary": summary_out, "rows": rows}, f, ensure_ascii=False)
 
 J = lambda o: json.dumps(o, ensure_ascii=False, separators=(",", ":"))
-stamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+# 생성 시각은 파일에 넣지 않습니다 (넣으면 내용이 같아도 다시 돌릴 때마다 diff가 생김)
 ts_code = f"""// ⚠️ 자동 생성 파일 — 분석 레포의 scripts/18_export_detection_log.py 가 만든다.
 // 직접 고치지 말고 파이썬을 다시 돌려서 새로 받아올 것.
 // 공식 test {len(summary)}대 엔진의 마지막 관측까지 GRU 예측 RUL이 주의(<{YELLOW})/위험(≤{RED}) 구간에 머무르기 시작한 시점과 판정.
-// 시간축은 엔진마다 자기만의 사이클이고, trueEnd(실제 남은 수명)는 평가용 정답이다 (생성: {stamp}).
+// 시간축은 엔진마다 자기만의 사이클이고, trueEnd(실제 남은 수명)는 평가용 정답이다.
 
 export type Verdict = 'tp' | 'fn' | 'fp' | 'watch' | 'cleared'
 
