@@ -41,8 +41,10 @@ gru["danger"] = gru["RUL_true"] <= DANGER_RUL
 gru["alarm"] = gru["RUL_pred"] <= DANGER_RUL
 gru["FP"] = gru["alarm"] & ~gru["danger"]
 gru["FN"] = ~gru["alarm"] & gru["danger"]
-fp_unit = int(gru.groupby("unit")["FP"].sum().idxmax())
-fn_unit = int(gru.groupby("unit")["FN"].sum().idxmax())
+# 오탐(또는 미탐) 사이클이 한 번도 없으면 idxmax()가 아무 엔진이나 고르게 되므로, 그 경우 사례 없음(None)으로 둡니다.
+fp_by_unit, fn_by_unit = gru.groupby("unit")["FP"].sum(), gru.groupby("unit")["FN"].sum()
+fp_unit = int(fp_by_unit.idxmax()) if fp_by_unit.max() > 0 else None
+fn_unit = int(fn_by_unit.idxmax()) if fn_by_unit.max() > 0 else None
 
 
 def plot_case(unit: int, kind: str, filename: str) -> dict:
@@ -79,11 +81,17 @@ def plot_case(unit: int, kind: str, filename: str) -> dict:
             "sensor_ma15_at_danger_start": round(float(ma.loc[danger_start]), 2)}
 
 
-fp_case = plot_case(fp_unit, "FP", "gru_error_case_false_alarm.png")
-fn_case = plot_case(fn_unit, "FN", "gru_error_case_missed.png")
+fp_case = plot_case(fp_unit, "FP", "gru_error_case_false_alarm.png") if fp_unit is not None else None
+fn_case = plot_case(fn_unit, "FN", "gru_error_case_missed.png") if fn_unit is not None else None
 with open(f"{OUT_METRICS}/gru_error_cases.json", "w", encoding="utf-8") as f:
     json.dump({"false_alarm": fp_case, "missed": fn_case, "typical_s3_at_danger": round(float(typical_at_danger), 2)},
               f, ensure_ascii=False, indent=2)
-print(f"[GRU 오탐 사례] 엔진 #{fp_case['unit']}: {fp_case['count']}사이클, 실제 잔여 {min(fp_case['rul_at_cycles'])}~{max(fp_case['rul_at_cycles'])}")
-print(f"[GRU 미탐 사례] 엔진 #{fn_case['unit']}: {fn_case['count']}사이클, 실제 잔여 {min(fn_case['rul_at_cycles'])}~{max(fn_case['rul_at_cycles'])}, "
-      f"위험 진입 때 s3 평균 {fn_case['sensor_ma15_at_danger_start']} (train 평균 {typical_at_danger:.1f})")
+if fp_case is None:
+    print("[GRU 오탐 사례] validation에 오탐 사이클이 없어 그래프를 만들지 않았습니다.")
+else:
+    print(f"[GRU 오탐 사례] 엔진 #{fp_case['unit']}: {fp_case['count']}사이클, 실제 잔여 {min(fp_case['rul_at_cycles'])}~{max(fp_case['rul_at_cycles'])}")
+if fn_case is None:
+    print("[GRU 미탐 사례] validation에 미탐 사이클이 없어 그래프를 만들지 않았습니다.")
+else:
+    print(f"[GRU 미탐 사례] 엔진 #{fn_case['unit']}: {fn_case['count']}사이클, 실제 잔여 {min(fn_case['rul_at_cycles'])}~{max(fn_case['rul_at_cycles'])}, "
+          f"위험 진입 때 s3 평균 {fn_case['sensor_ma15_at_danger_start']} (train 평균 {typical_at_danger:.1f})")

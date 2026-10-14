@@ -17,11 +17,19 @@ Sentinel 프로젝트(터보팬 엔진 RUL 예측) 전 과정에서 공통으로
 """
 
 import os
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import matplotlib
+
+# Windows에서 출력을 파이프·리다이렉트하면 콘솔 인코딩(cp949)이 "—" 같은 문자를 못 써서, 결과 파일을 다 저장한
+# 뒤 마지막 print에서 UnicodeEncodeError로 멈출 수 있습니다. 못 쓰는 문자는 "?"로 바꿔 출력하게 합니다
+# (모든 스크립트가 common을 먼저 import 하므로 여기서 한 번만 설정).
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(errors="replace")
 
 # 그래프는 화면에 띄우지 않고 파일로만 저장합니다. 이 설정이 있어야 모니터가 없는 서버나
 # 원격 환경에서도 그래프 저장이 오류 없이 동작합니다 (모든 스크립트가 common을 먼저 import).
@@ -517,3 +525,44 @@ def nasa_score(y_true, y_pred):
     d = np.asarray(y_pred) - np.asarray(y_true)
     score = np.where(d < 0, np.exp(-d / 13) - 1, np.exp(d / 10) - 1)
     return float(np.sum(score))
+
+
+# ---------------------------------------------------------------------------
+# 9. 정비 일정 시뮬레이션 (13번 위험 기준 비용 분석과 15번 경보 방식 비교가 같이 씀)
+# ---------------------------------------------------------------------------
+# 경보가 울리면 → 다음 주간 계획 회의 → 준비 7일 → 그 뒤 처음 돌아오는 정비 슬롯(10~20일 간격)에 정비.
+# 정비 전에 고장 나면 비계획 정비(비용 cost_fail), 아니면 계획 정비(비용 1, 남은 수명만큼 운행을 덜 함).
+# 근거와 문헌은 13_threshold_cost.py 설명 참고. 두 스크립트가 같은 규칙을 쓰도록 한 곳에 둡니다.
+MAINT_PREP_DAYS = 7              # 추가 정비 준비 최소 7일
+MAINT_SLOT_INTERVAL = (10, 20)   # 정비 슬롯 10~20일 간격
+MAINT_REVIEW_EVERY = 7           # 정비 계획 매주 갱신
+MAINT_N_SIM = 200                # 무작위 반복 횟수
+
+
+def maintenance_lead_time(rng) -> int:
+    """경보 → 정비까지 걸리는 사이클 (주간 회의 대기 + 준비 7일 + 다음 슬롯까지 대기)."""
+    wait_review = rng.integers(0, MAINT_REVIEW_EVERY)
+    interval = rng.integers(MAINT_SLOT_INTERVAL[0], MAINT_SLOT_INTERVAL[1] + 1)
+    wait_slot = rng.integers(0, interval)          # 준비가 끝난 뒤 다음 슬롯까지
+    return int(wait_review + MAINT_PREP_DAYS + wait_slot)
+
+
+def simulate_maintenance(alarm_cycle: dict, life, cost_fail: float, n_sim: int = MAINT_N_SIM, seed: int = 42) -> dict:
+    """alarm_cycle: 엔진 → 경보 사이클(None이면 경보 없음), life: 엔진 → 실제 수명(사이클)."""
+    rng = np.random.default_rng(seed)
+    total_cost = total_ops = failures = wasted = 0.0
+    for _ in range(n_sim):
+        for u, a in alarm_cycle.items():
+            L = int(life[u])
+            m = None if a is None else a + maintenance_lead_time(rng)
+            if m is None or m >= L:
+                total_cost += cost_fail
+                total_ops += L
+                failures += 1
+            else:
+                total_cost += 1.0
+                total_ops += m
+                wasted += L - m
+    n = n_sim * len(alarm_cycle)
+    return {"cost_per_1000_cycles": 1000 * total_cost / total_ops, "failure_rate": failures / n,
+            "avg_wasted_cycles": wasted / max(1, n - failures)}

@@ -3,7 +3,7 @@
 ======================
 같은 조건에서 "RF 분류"와 "GRU(남은 수명 예측 → 40 이하면 경보)"를 비교하는 실험.
 
-배경: 지금까지는 RF 분류가 확률 기준을 0.5 → 0.36으로 낮춰(놓침을 줄이도록) 평가됐고,
+배경: 지금까지는 RF 분류가 확률 기준을 0.5에서 더 낮은 값(09번이 고른 값, 현재 0.36)으로 낮춰(놓침을 줄이도록) 평가됐고,
 GRU는 기준 40을 그대로 썼습니다. 그래서 "RF가 더 잘 잡는다"가 모델 차이인지, 경보 기준을
 다르게 잡은 차이인지 알 수 없었습니다. 이 스크립트는 두 가지를 확인합니다.
 
@@ -24,13 +24,15 @@ from sklearn.ensemble import RandomForestClassifier
 
 from common import (
     load_raw, find_constant_columns, add_rul_labels, split_engines, Normalizer, build_rf_features,
-    SENSOR_COLS_RAW, DANGER_RUL, OUT_METRICS, TRAIN_FILE, TEST_FILE, RUL_FILE,
+    SENSOR_COLS_RAW, DANGER_RUL, OUT_METRICS, TRAIN_FILE, TEST_FILE, RUL_FILE, simulate_maintenance,
 )
 
 RF_PARAMS = dict(n_estimators=300, min_samples_leaf=5, random_state=42, n_jobs=-1)  # 09번과 동일
-RF_PROB_TH = 0.36                                                                    # 09번에서 고른 값
+# 확률 기준은 09번이 고른 값을 그대로 읽습니다 (09번을 다시 돌려 값이 바뀌어도 이 스크립트가 따라가도록).
+with open(f"{OUT_METRICS}/classification_metrics.json", encoding="utf-8") as _f:
+    RF_PROB_TH = float(json.load(_f)["threshold_adjustment"]["chosen"])
 COST_SETTINGS = {"1:5": 5.0, "1:2": 2.0}
-PREP_DAYS, SLOT_INTERVAL, REVIEW_EVERY, N_SIM = 7, (10, 20), 7, 200                   # 13번과 동일
+# 정비 정책(준비 7일·슬롯 10~20일·주간 계획·200회 반복)은 13번과 같은 common.simulate_maintenance를 씁니다.
 
 # ---------------------------------------------------------------------------
 # 1. 데이터·RF 분류 (09번과 같은 분할·정규화·특성·설정)
@@ -64,33 +66,7 @@ life = load_raw(TRAIN_FILE).groupby("unit")["cycle"].max()
 # ---------------------------------------------------------------------------
 
 
-def lead_time(rng) -> int:
-    wait_review = rng.integers(0, REVIEW_EVERY)
-    interval = rng.integers(SLOT_INTERVAL[0], SLOT_INTERVAL[1] + 1)
-    return int(wait_review + PREP_DAYS + rng.integers(0, interval))
-
-
-def simulate(alarm_cycle: dict, cost_fail: float, seed: int = 42) -> dict:
-    rng = np.random.default_rng(seed)
-    total_cost = total_ops = failures = wasted = 0.0
-    for _ in range(N_SIM):
-        for u, a in alarm_cycle.items():
-            L = int(life[u])
-            m = None if a is None else a + lead_time(rng)
-            if m is None or m >= L:
-                total_cost += cost_fail
-                total_ops += L
-                failures += 1
-            else:
-                total_cost += 1.0
-                total_ops += m
-                wasted += L - m
-    n = N_SIM * len(alarm_cycle)
-    return {"cost": 1000 * total_cost / total_ops, "failure_rate": failures / n,
-            "avg_wasted_cycles": wasted / max(1, n - failures)}
-
-
-def first_alarm(signal: pd.Series, cond) -> dict:
+def first_alarm(cond) -> dict:
     out = {}
     for u, g in val_feat.groupby("unit"):
         hit = g.loc[cond(g), "cycle"]
@@ -99,15 +75,15 @@ def first_alarm(signal: pd.Series, cond) -> dict:
 
 
 rows = []
-for t in [0.1, 0.2, 0.3, RF_PROB_TH, 0.4, 0.5, 0.6, 0.7, 0.8]:
-    alarm = first_alarm(None, lambda g, t=t: g["prob"] >= t)
+for t in sorted({0.1, 0.2, 0.3, RF_PROB_TH, 0.4, 0.5, 0.6, 0.7, 0.8}):
+    alarm = first_alarm(lambda g, t=t: g["prob"] >= t)
     for cname, cf in COST_SETTINGS.items():
-        rows.append({"method": "RF 분류", "setting": f"확률 ≥ {t:.2f}", "cost_ratio": cname, **simulate(alarm, cf)})
+        rows.append({"method": "RF 분류", "setting": f"확률 ≥ {t:.2f}", "cost_ratio": cname, **simulate_maintenance(alarm, life, cf)})
 for n in range(20, 81, 5):
-    alarm = first_alarm(None, lambda g, n=n: g["RUL_pred"] <= n)
+    alarm = first_alarm(lambda g, n=n: g["RUL_pred"] <= n)
     for cname, cf in COST_SETTINGS.items():
-        rows.append({"method": "GRU", "setting": f"예측 ≤ {n}", "cost_ratio": cname, **simulate(alarm, cf)})
-cost = pd.DataFrame(rows)
+        rows.append({"method": "GRU", "setting": f"예측 ≤ {n}", "cost_ratio": cname, **simulate_maintenance(alarm, life, cf)})
+cost = pd.DataFrame(rows).rename(columns={"cost_per_1000_cycles": "cost"})
 cost.to_csv(f"{OUT_METRICS}/alert_comparison_cost.csv", index=False, encoding="utf-8-sig")
 
 # ---------------------------------------------------------------------------
@@ -141,7 +117,7 @@ rf_at_gru = rf[rf.TP >= gru_ref.TP].sort_values("setting", ascending=False).iloc
 
 summary = {
     "test_n": {"danger": n_pos, "safe": n_neg},
-    "RF_0.36": {k: float(rf_ref[k]) for k in ("TP", "FN", "FP", "recall")},
+    f"RF_{RF_PROB_TH}": {k: float(rf_ref[k]) for k in ("TP", "FN", "FP", "recall")},
     "GRU_40": {k: float(gru_ref[k]) for k in ("TP", "FN", "FP", "recall")},
     "GRU_matched_to_RF_recall": {"setting": float(gru_at_rf.setting), **{k: float(gru_at_rf[k]) for k in ("TP", "FN", "FP", "recall")}},
     "RF_matched_to_GRU_recall": {"setting": float(rf_at_gru.setting), **{k: float(rf_at_gru[k]) for k in ("TP", "FN", "FP", "recall")}},
