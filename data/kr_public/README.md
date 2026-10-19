@@ -20,3 +20,13 @@ DATA_GO_KR_KEY='발급받은_인증키' python scripts/23_cycles_per_day.py --fe
 ```
 
 요청 파라미터: `from_month=202501`, `to_month=202512`, `pax_cargo=Y`(여객기), `domestic_foreign=I`(국제선) 또는 `D`(국내선), `type=json`.
+
+## 공항 날씨 (기온·습도)
+
+`scripts/27_kr_airport_weather.py`가 기상청 API허브의 공항기상관측(AMOS, 분 자료)을 호출해 `outputs/kr_public/airport_weather_*.csv/json`으로 요약합니다.
+(원본 응답은 저장하지 않음, 매월 15일 02·08·14·20시 표본, 공항 7곳 합산). 인증키는 환경변수로만 넣습니다.
+
+```bash
+KMA_AUTHKEY='발급받은_키' python scripts/27_kr_airport_weather.py
+```
+
